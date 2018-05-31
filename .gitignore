@@ -1,0 +1,7 @@
+*.pyc
+bin/*
+lib/*
+include/*
+share/*
+*/node_modules/*
+*package-lock.json
