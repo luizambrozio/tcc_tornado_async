@@ -1,4 +1,5 @@
 import time
+import json
 from tornado import gen, httpclient
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
@@ -11,7 +12,11 @@ DEBUG = True
 PORT = 8888
 FACEBOOK_URL = "http://api.facebook.com/restserver.php?format=json&method=links.getStats&urls={0}"
 external_api_url = FACEBOOK_URL.format("http://globo.com")
-nosso = 'http://localhost:3000/'
+nosso = 'http://localhost:3000/pedido'
+
+HEADERS = {
+    'Content-Type': 'application/json'
+}
 
 
 # Options
@@ -63,9 +68,16 @@ class MainHandlerAsync(RequestHandler):
         print('antes {}'.format(num))
         client = httpclient.AsyncHTTPClient()
 
+        pedidos = [
+            "Banoffee",
+            "cha",
+            "sanduiche"
+        ]
+
         tasks = []
-        for t in ['5s', '2s', '2s', '2s', '5s', '7s']:
-            req = httpclient.HTTPRequest(nosso + t, method='GET')
+        for pedido in pedidos:
+            pedido_json = json.dumps({"pedido": pedido})
+            req = httpclient.HTTPRequest(nosso, headers=HEADERS, method='POST', body=pedido_json)
             tasks.append(gen.Task(client.fetch, req))
         return gen.Multi(tasks)
 
