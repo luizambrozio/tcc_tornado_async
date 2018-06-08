@@ -13,11 +13,11 @@ var produtos = [
   {key:"Avelã", value: 3000},
   {key:"Banoffee", value:2500},
   {key:"Brigadeiro", value:2000},
-  {key:"tradicional", value:1500},
-  {key:"cha", value:2000},
-  {key:"agua", value:1000},
-  {key:"refrigerante", value:1000},
-  {key:"sanduiche", value:10000}
+  {key:"Tradicional", value:1500},
+  {key:"Cha", value:2000},
+  {key:"Agua", value:1000},
+  {key:"Refrigerante", value:1000},
+  {key:"Sanduiche", value:10000}
 ]; // create an empty array
 
 app.get('/produtos', function (req, res) {
