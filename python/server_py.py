@@ -18,6 +18,16 @@ HEADERS = {
     'Content-Type': 'application/json'
 }
 
+pedidos = [
+    "Banoffee",
+    "Brigadeiro",
+    "Sanduiche",
+    "Sanduiche"
+]
+
+
+# httpclient.AsyncHTTPClient.configure( None, max_clients=1000)
+
 
 # Options
 define("debug", default=DEBUG, help="Enable or disable debug", type=bool)
@@ -25,9 +35,7 @@ define("port", default=PORT, help="Run app on the given port", type=int)
 
 
 def create_app():
-    """
-    Create instance of tornado.web.Application.
-    """
+
     routes = [
         URLSpec(r'/async', MainHandlerAsync),
         URLSpec(r"/block", MainHandlerBlocking)
@@ -38,10 +46,12 @@ def create_app():
 class MainHandlerBlocking(RequestHandler):
 
     def get(self):
-        req = httpclient.HTTPRequest(nosso+'5s', method='GET')
-        # we could use something like requests or urllib here
-        client = httpclient.HTTPClient()
-        response = client.fetch(req)
+
+        for pedido in pedidos:
+            pedido_json = json.dumps({"pedido": pedido})
+            req = httpclient.HTTPRequest(nosso, headers=HEADERS, method='POST', body=pedido_json)
+            client = httpclient.HTTPClient()
+            response = client.fetch(req)
 
         # do something with the response (response.body)
         self.finish("from block")
@@ -52,15 +62,9 @@ class MainHandlerAsync(RequestHandler):
     @asynchronous
     @gen.engine
     def get(self):
-        # don't let the yield call confuse you, it's just Tornado helpers to make
-        # writing async code a bit easier. This is the same as doing
-        # client.fetch(req, callback=_some_other_helper_function)
 
         response = yield self.faz_req(1)
         print('depois 1')
-        #response = yield self.faz_req(2)
-        #print('depois 2')
-        ### do something with the response (response.body)
         self.finish("from asynchronous")
 
 
@@ -68,11 +72,7 @@ class MainHandlerAsync(RequestHandler):
         print('antes {}'.format(num))
         client = httpclient.AsyncHTTPClient()
 
-        pedidos = [
-            "Banoffee",
-            "cha",
-            "sanduiche"
-        ]
+
 
         tasks = []
         for pedido in pedidos:
