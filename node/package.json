@@ -1,7 +1,9 @@
 {
   "dependencies": {
     "body-parser": "^1.18.3",
+    "cluster": "^0.7.7",
     "delay": "^3.0.0",
-    "express": "^4.16.3"
+    "express": "^4.16.3",
+    "os": "^0.1.1"
   }
 }
