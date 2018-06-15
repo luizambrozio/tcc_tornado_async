@@ -17,7 +17,11 @@ HEADERS = {
 # no maximo 1000 pedidos à cozinha por vez.
 httpclient.AsyncHTTPClient.configure(None, max_clients=1000)
 
+"""Ativa o DEBUG do servidor, isto é, ele irá reiniciar toda hora que
+o arquivo é modificado."""
 define('debug', default=True, help='Enable or disable debug', type=bool)
+
+"""Define a porta que o servidor irá subir."""
 define('port', default=8888, help='Run app on the given port', type=int)
 
 
@@ -43,6 +47,35 @@ class GarcomSincrono(RequestHandler):
         json_cliente = json_decode(self.request.body)
         return json_cliente.get("pedidos", [])
 
+    def realiza_pedido_cozinha(self, pedido_json):
+        """Esta função se comunica com a cozinha e realiza o pedido.
+
+        Para utiliza-la, deve-se passar um json com o pedido.
+        """
+        # Escreve o pedido para a cozinha
+        pedido_cozinha = httpclient.HTTPRequest(
+            COZINHA, headers=HEADERS,
+            method='POST', body=pedido_json
+        )
+        # Cria a conexão com a cozinha
+        comunicacao_cozinha = httpclient.HTTPClient()
+
+        return comunicacao_cozinha.fetch(pedido_cozinha)
+
+    def realiza_pedidos_cozinha(self, pedidos):
+        pedidos_prontos = []
+        # Vai em cada um dos pedidos
+        for pedido in pedidos:
+            # Gera um json para se comunicar com a cozinha
+            pedido_json = json.dumps({"pedido": pedido})
+            # Realiza o pedido à cozinha
+            pedido_pronto = self.realiza_pedido_cozinha(pedido_json)
+            # Adiciona o pedido à lista de pedidos prontos
+            pedidos_prontos.append(pedido_pronto)
+
+        return pedidos_prontos
+
+
     def post(self):
         """Esta função representa a comunicação do cliente com o garçom sincrono.
 
@@ -59,52 +92,82 @@ class GarcomSincrono(RequestHandler):
         pedidos = self.anotar_pedidos()
 
         # Lista de pedidos que ficaram prontos
-        pedidos_prontos = []
-
-        # Vai em cada um dos pedidos
-        for pedido in pedidos:
-            # Gera um json para se comunicar com a cozinha
-            pedido_json = json.dumps({"pedido": pedido})
-            # Escreve o pedido para a cozinha
-            pedido_cozinha = httpclient.HTTPRequest(
-                COZINHA, headers=HEADERS,
-                method='POST', body=pedido_json
-            )
-            # Cria a conexão com a cozinha
-            comunicacao_cozinha = httpclient.HTTPClient()
-            # Faz o pedido em si
-            pedido_pronto = comunicacao_cozinha.fetch(pedido_cozinha)
-            # Adiciona o pedido à lista de pedidos prontos
-            pedidos_prontos.append(pedido_pronto)
+        pedidos_prontos = self.realiza_pedidos_cozinha(pedidos)
 
         self.finish("Aqui esta seus pedidos prontos: \n {}".format(
             ",".join(pedidos_prontos)
         ))
 
 
-class MainHandlerAsync(RequestHandler):
+class GarcomAssincrono(RequestHandler):
+    """Esta classe representa um garçom assincrono.
+
+    Ele é assincrono, pois só consegue fazer diversos pedidos à cozinha.
+    E também atende outros clientes enquanto o pedido não ficar pronto.
+    """
+
+    def anotar_pedidos(self):
+        """Esta função anota o pedido do cliente."""
+        json_cliente = json_decode(self.request.body)
+        return json_cliente.get("pedidos", [])
 
     @asynchronous
     @gen.engine
-    def get(self):
+    def post(self):
+        """Esta função representa a comunicação do cliente com o garçom assincrono.
 
-        response = yield self.faz_req(1)
-        print('depois 1')
-        self.finish("from asynchronous")
+        Foi optado por um 'POST', pois a comunicação com o garçom é
+        uma solicitação de 'inserção' de dados. Para entender melhor, leia:
+        https://pt.wikipedia.org/wiki/POST_(HTTP).
 
+        Para realizar uma solicitação ao garçom, deve ser passado a ele:
+        {
+            'pedidos': [<uma lista de strings com os pedidos>]
+        }
+        """
+        # Chama a função para anotar os pedidos
+        pedidos = self.anotar_pedidos()
 
-    def faz_req(self, num):
-        print('antes {}'.format(num))
-        client = httpclient.AsyncHTTPClient()
+        pedidos_prontos = yield self.realiza_pedidos_cozinha(pedidos)
 
+        self.finish("Aqui esta seus pedidos prontos: \n {}".format(
+            ",".join(pedidos_prontos)
+        ))
 
+    def recuperar_comunicacao_cozinha(self):
+        """Esta função recupera o cria a comunicação com a cozinha.
 
-        tasks = []
+        A comunicação pode ser recuperada pois pode já estar acontecendo.
+        Já que o metodo é assincrono, não precisa esperar o pedido terminar
+        para fazer outro, pode 'adicionar' o pedido na comunicação ja aberta.
+        """
+        if not hasattr(self, 'comunicacao_cozinha'):
+            self.comunicacao_cozinha = httpclient.AsyncHTTPClient()
+        return self.comunicacao_cozinha
+
+    def realiza_pedido_cozinha(self, pedido_json):
+        """Esta função se comunica com a cozinha e realiza o pedido.
+
+        Para utiliza-la, deve-se passar um json com o pedido.
+        """
+        # Escreve o pedido para a cozinha
+        pedido_cozinha = httpclient.HTTPRequest(
+            COZINHA, headers=HEADERS,
+            method='POST', body=pedido_json
+        )
+        # Cria ou recupera a conexão com a cozinha
+        comunicacao_cozinha = self.recuperar_comunicacao_cozinha()
+
+        return gen.Task(comunicacao_cozinha.fetch, pedido_cozinha)
+
+    def realiza_pedidos_cozinha(self, pedidos):
+        pedidos_sendo_preparados = []
         for pedido in pedidos:
             pedido_json = json.dumps({"pedido": pedido})
-            req = httpclient.HTTPRequest(nosso, headers=HEADERS, method='POST', body=pedido_json)
-            tasks.append(gen.Task(client.fetch, req))
-        return gen.Multi(tasks)
+            pedidos_sendo_preparados.append(
+                self.realiza_pedido_cozinha(pedido_json)
+            )
+        return gen.Multi(pedidos_sendo_preparados)
 
 
 def main():
