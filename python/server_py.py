@@ -25,9 +25,11 @@ pedidos = [
     "Sanduiche"
 ]
 
-
-# httpclient.AsyncHTTPClient.configure( None, max_clients=1000)
-
+pedidosTalita = [
+    "Cha",
+    "Tradicional",
+    "Sanduiche"
+]
 
 # Options
 define("debug", default=DEBUG, help="Enable or disable debug", type=bool)
@@ -38,7 +40,9 @@ def create_app():
 
     routes = [
         URLSpec(r'/async', MainHandlerAsync),
-        URLSpec(r"/block", MainHandlerBlocking)
+        URLSpec(r'/block', MainHandlerBlocking),
+        URLSpec(r'/garcom-asincrono', GarcomAsincrono),
+        URLSpec(r'/garcom-sincrono', GarcomSincrono)
     ]
     return Application(routes, **options.as_dict())
 
@@ -53,9 +57,41 @@ class MainHandlerBlocking(RequestHandler):
             client = httpclient.HTTPClient()
             response = client.fetch(req)
 
-        # do something with the response (response.body)
         self.finish("from block")
 
+class GarcomSincrono(RequestHandler):
+
+    def get(self):
+
+        for pedido in pedidosTalita:
+            pedido_json = json.dumps({"pedido": pedido})
+            req = httpclient.HTTPRequest(nosso, headers=HEADERS, method='POST', body=pedido_json)
+            client = httpclient.HTTPClient()
+            response = client.fetch(req)
+
+        self.finish("from block Talita")
+
+class GarcomAsincrono(RequestHandler):
+
+    @asynchronous
+    @gen.engine
+    def get(self):
+
+        response = yield self.faz_req(1)
+        print('depois 1')
+        self.finish("from asynchronous")
+
+
+    def faz_req(self, num):
+        print('antes {}'.format(num))
+        client = httpclient.AsyncHTTPClient()
+
+        tasks = []
+        for pedido in pedidosTalita:
+            pedido_json = json.dumps({"pedido": pedido})
+            req = httpclient.HTTPRequest(nosso, headers=HEADERS, method='POST', body=pedido_json)
+            tasks.append(gen.Task(client.fetch, req))
+        return gen.Multi(tasks)
 
 class MainHandlerAsync(RequestHandler):
 
@@ -71,8 +107,6 @@ class MainHandlerAsync(RequestHandler):
     def faz_req(self, num):
         print('antes {}'.format(num))
         client = httpclient.AsyncHTTPClient()
-
-
 
         tasks = []
         for pedido in pedidos:
