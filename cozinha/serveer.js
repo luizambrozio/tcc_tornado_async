@@ -27,6 +27,7 @@ app.get('/produtos', function (req, res) {
 
 app.post('/pedido', function (req, res) {
   let pedido = req.body.pedido
+  console.log(pedido);
   produtos.forEach(e => {
     if(e.key == pedido){
       delay(e.value, 'a result')
