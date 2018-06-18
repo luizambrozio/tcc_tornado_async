@@ -3,7 +3,7 @@ from tornado.escape import json_decode
 from tornado.httpserver import HTTPServer
 from tornado.ioloop import IOLoop
 from tornado.log import app_log
-from tornado.options import define, options
+from tornado.options import define, options, parse_command_line
 from tornado.web import asynchronous, Application, RequestHandler, URLSpec
 import json
 
@@ -42,12 +42,16 @@ class GarcomSincrono(RequestHandler):
     E também não atende outros clientes enquanto o pedido não ficar pronto.
     """
 
+    def criar_comunicacao_cozinha(self):
+        """Cria-se sempre a comunicação com a cozinha."""
+        return httpclient.HTTPClient()
+
     def anotar_pedidos(self):
         """Esta função anota o pedido do cliente."""
         json_cliente = json_decode(self.request.body)
         return json_cliente.get("pedidos", [])
 
-    def realiza_pedido_cozinha(self, pedido_json):
+    def envia_pedido_cozinha(self, pedido_json):
         """Esta função se comunica com a cozinha e realiza o pedido.
 
         Para utiliza-la, deve-se passar um json com o pedido.
@@ -58,14 +62,16 @@ class GarcomSincrono(RequestHandler):
             method='POST', body=pedido_json
         )
         # Cria a conexão com a cozinha
-        comunicacao_cozinha = httpclient.HTTPClient()
+        comunicacao_cozinha = self.criar_comunicacao_cozinha()
         # Retorna o pedido.
         return comunicacao_cozinha.fetch(pedido_cozinha)
 
-    def realiza_pedidos_cozinha(self, pedidos):
-        """Esta função esta responsavel por interar cada pedido.
+    def organiza_pedidos_e_envia_cozinha(self, pedidos):
+        """Esta função esta responsavel por organizar os pedidos e enviar à cozinha.
 
-        Gera seu JSON e realiza o pedido para a cozinha.
+        Ela gera seu JSON e realiza o pedido para a cozinha.
+        Retorna a lista de pedidos que estão prontos.
+        Pois espera o retorno da cozinha.
         """
         pedidos_prontos = []
         # Vai em cada um dos pedidos
@@ -73,7 +79,7 @@ class GarcomSincrono(RequestHandler):
             # Gera um json para se comunicar com a cozinha
             pedido_json = json.dumps({"pedido": pedido})
             # Realiza o pedido à cozinha
-            pedido_pronto = self.realiza_pedido_cozinha(pedido_json)
+            pedido_pronto = self.envia_pedido_cozinha(pedido_json)
             # Adiciona o pedido à lista de pedidos prontos
             pedidos_prontos.append(pedido_pronto)
 
@@ -95,10 +101,10 @@ class GarcomSincrono(RequestHandler):
         pedidos = self.anotar_pedidos()
 
         # Lista de pedidos que ficaram prontos
-        pedidos_prontos = self.realiza_pedidos_cozinha(pedidos)
+        pedidos_prontos = self.organiza_pedidos_e_envia_cozinha(pedidos)
 
         self.finish("Aqui esta seus pedidos prontos: \n {}".format(
-            ",".join(pedidos_prontos)
+            ",".join(pedidos)
         ))
 
 
@@ -109,7 +115,7 @@ class GarcomAssincrono(RequestHandler):
     E também atende outros clientes enquanto o pedido não ficar pronto.
     """
 
-    def recuperar_comunicacao_cozinha(self):
+    def criar_comunicacao_cozinha(self):
         """Esta função recupera o cria a comunicação com a cozinha.
 
         A comunicação pode ser recuperada pois pode já estar acontecendo.
@@ -120,7 +126,7 @@ class GarcomAssincrono(RequestHandler):
             self.comunicacao_cozinha = httpclient.AsyncHTTPClient()
         return self.comunicacao_cozinha
 
-    def realiza_pedido_cozinha(self, pedido_json):
+    def envia_pedido_cozinha(self, pedido_json):
         """Esta função se comunica com a cozinha e realiza o pedido.
 
         Para utiliza-la, deve-se passar um json com o pedido.
@@ -131,12 +137,12 @@ class GarcomAssincrono(RequestHandler):
             method='POST', body=pedido_json
         )
         # Cria ou recupera a conexão com a cozinha
-        comunicacao_cozinha = self.recuperar_comunicacao_cozinha()
+        comunicacao_cozinha = self.criar_comunicacao_cozinha()
 
         # Retorna uma task que será cuidada pelo IOLoop
         return gen.Task(comunicacao_cozinha.fetch, pedido_cozinha)
 
-    def realiza_pedidos_cozinha(self, pedidos):
+    def organiza_pedidos_e_envia_cozinha(self, pedidos):
         # Criar lista de pedidos a serem preparados
         pedidos_sendo_preparados = []
         # Vai em cada um dos pedidos
@@ -144,7 +150,7 @@ class GarcomAssincrono(RequestHandler):
             # Gera um json para se comunicar com a cozinha
             pedido_json = json.dumps({"pedido": pedido})
             # Realiza o pedido à cozinha
-            pedido_preparando = self.realiza_pedido_cozinha(pedido_json)
+            pedido_preparando = self.envia_pedido_cozinha(pedido_json)
             # Adicionando o pedido a liista de pedidos à serem preparados
             pedidos_sendo_preparados.append(pedido_preparando)
 
@@ -177,7 +183,7 @@ class GarcomAssincrono(RequestHandler):
         # Utiliza-se da palavra "yield" para passar para o
         # IOLoop o controle desta função.
         # E liberar o garçom para entender outras pessoas.
-        pedidos_prontos = yield self.realiza_pedidos_cozinha(pedidos)
+        pedidos_prontos = yield self.organiza_pedidos_e_envia_cozinha(pedidos)
 
         self.finish("Aqui esta seus pedidos prontos: \n {}".format(
             ",".join(pedidos_prontos)
@@ -186,6 +192,10 @@ class GarcomAssincrono(RequestHandler):
 
 def main():
     """Função que reune os passos para subir o servidor."""
+    # Identifica os parametros que se passa pela command line.
+    # ex: python server.py --port 8888
+    parse_command_line()
+
     # Chama a função que retorna as rotas do servidor.
     rotas = criar_rotas()
 
@@ -193,7 +203,7 @@ def main():
     servidor = HTTPServer(rotas)
 
     # Inicia o servidor.
-    servidor.listen()
+    servidor.listen(options['port'])
 
     # Avisa a porta que o servidor esta escutando.
     app_log.info("Service is running at port {0}".format(options['port']))
