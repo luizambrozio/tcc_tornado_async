@@ -126,6 +126,11 @@ class GarcomAssincrono(RequestHandler):
             self.comunicacao_cozinha = httpclient.AsyncHTTPClient()
         return self.comunicacao_cozinha
 
+    def anotar_pedidos(self):
+        """Esta função anota o pedido do cliente."""
+        json_cliente = json_decode(self.request.body)
+        return json_cliente.get("pedidos", [])
+
     def envia_pedido_cozinha(self, pedido_json):
         """Esta função se comunica com a cozinha e realiza o pedido.
 
@@ -143,6 +148,11 @@ class GarcomAssincrono(RequestHandler):
         return gen.Task(comunicacao_cozinha.fetch, pedido_cozinha)
 
     def organiza_pedidos_e_envia_cozinha(self, pedidos):
+        """Esta função esta responsavel por organizar os pedidos e enviar à cozinha.
+
+        Ela gera seu JSON e realiza o pedido para a cozinha.
+        Retorna a lista com as tasks de pedidos que estão prontos.
+        """
         # Criar lista de pedidos a serem preparados
         pedidos_sendo_preparados = []
         # Vai em cada um dos pedidos
@@ -154,14 +164,9 @@ class GarcomAssincrono(RequestHandler):
             # Adicionando o pedido a liista de pedidos à serem preparados
             pedidos_sendo_preparados.append(pedido_preparando)
 
-        # Retorna uma lista de taks dentro de uma Multi
+        # Retorna uma lista de tasks dentro de uma Multi
         # que sera cuidada pelo IOLoop
         return gen.Multi(pedidos_sendo_preparados)
-
-    def anotar_pedidos(self):
-        """Esta função anota o pedido do cliente."""
-        json_cliente = json_decode(self.request.body)
-        return json_cliente.get("pedidos", [])
 
     @asynchronous
     @gen.engine
