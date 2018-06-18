@@ -186,7 +186,7 @@ class GarcomAssincrono(RequestHandler):
         pedidos_prontos = yield self.organiza_pedidos_e_envia_cozinha(pedidos)
 
         self.finish("Aqui esta seus pedidos prontos: \n {}".format(
-            ",".join(pedidos_prontos)
+            ",".join(pedidos)
         ))
 
 
