@@ -63,6 +63,10 @@ class GarcomSincrono(RequestHandler):
         return comunicacao_cozinha.fetch(pedido_cozinha)
 
     def realiza_pedidos_cozinha(self, pedidos):
+        """Esta função esta responsavel por interar cada pedido.
+
+        Gera seu JSON e realiza o pedido para a cozinha.
+        """
         pedidos_prontos = []
         # Vai em cada um dos pedidos
         for pedido in pedidos:
