@@ -1,9 +1,11 @@
 import tornado.ioloop
 import tornado.web
 
+
 class MainHandler(tornado.web.RequestHandler):
     def get(self):
         self.write("Ola, TCC")
+
 
 if __name__ == "__main__":
     application = tornado.web.Application([
